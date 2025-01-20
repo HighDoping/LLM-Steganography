@@ -132,33 +132,34 @@ class ReedSolomonCodec:
 
     def decode_byte_stream(self, encoded_stream: bytes) -> bytes:
         """
-        Decode a Reed-Solomon encoded stream.
-        Uses sliding window to find valid chunks.
+        Decode a Reed-Solomon encoded stream using bit-level sliding window.
+        Handles broken blocks and bit shifts.
         """
         decoded_stream = []
+        # Convert bytes to bits for finer granularity
+        bits = "".join([f"{b:08b}" for b in encoded_stream])
+        print(bits)
+        pos = 0
+        while pos <= len(bits) - self.n * 8:  # Ensure enough bits for a chunk
+            # Convert window of bits back to bytes
+            chunk_bits = bits[pos : pos + self.n * 8]
+            chunk_bytes = bytes(
+                int(chunk_bits[i : i + 8], 2) for i in range(0, len(chunk_bits), 8)
+            )
+            print(chunk_bytes, pos)
 
-        # Try each possible starting position
-        for start in range(len(encoded_stream)):
-            remaining = encoded_stream[start:]
-            if len(remaining) < self.n:
-                break
-
-            chunk = remaining[: self.n]
             try:
                 # Attempt to decode this chunk
-                decoded_chunk = self.rs.decode(chunk)[0]
+                decoded_chunk = self.rs.decode(chunk_bytes)[0]
                 decoded_stream.append(decoded_chunk.rstrip(b"\x00"))
-                # If successful, skip ahead by chunk size
-                start += self.n
-                remaining = remaining[self.n :]
-                # Try to decode remaining full chunks
-                while len(remaining) >= self.n:
-                    chunk = remaining[: self.n]
-                    decoded_chunk = self.rs.decode(chunk)[0]
-                    decoded_stream.append(decoded_chunk.rstrip(b"\x00"))
-                    remaining = remaining[self.n :]
-                return b"".join(decoded_stream)
+                # Move to next chunk
+                pos += self.n * 8
             except reedsolo.ReedSolomonError:
+                # If decoding fails, slide forward one bit
+                pos += 1
                 continue
 
-        raise reedsolo.ReedSolomonError("No valid data found")
+        if not decoded_stream:
+            raise reedsolo.ReedSolomonError("No valid data found")
+
+        return b"".join(decoded_stream)

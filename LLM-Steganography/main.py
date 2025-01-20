@@ -45,13 +45,8 @@ def generate_sentence(string, cut=4, **api_args) -> str:
                 return new_string[:cut]
 
 
-# %%
-plaintxt = "secret"
-
-
-# %%
 def llm_encode(
-    plaintxt, starter="我", password=None, base=2, char_per_index=6, **api_args
+    plaintxt: str, starter: str, password=None, base=2, char_per_index=6, **api_args
 ):
     # Encrypt the plaintext with a password
     byte_stream = bytes_raw(plaintxt)
@@ -80,8 +75,9 @@ def llm_encode(
             n = hash_int % base
             pbar.set_postfix_str(f"trying: {new_string}, n:{n}, index:{index}")
             n_try += 1
-            if n_try > 200:
-                raise ValueError("Can't find the correct string")
+            # if n_try > 10:
+            #     # raise ValueError("Can't find the correct string")
+            #     break
         result.append(new_string)
         print("".join(result))
     return "".join(result)
@@ -108,11 +104,12 @@ def llm_decode(encoded: str, password=None, base=2, char_per_index=6):
                 )
             # basex to byte
             byte_stream = index_to_byte(encoded_list, base=base)
+            print(byte_stream)
             codec = ReedSolomonCodec(8, 7)
             decoded_byte_stream = codec.decode_byte_stream(byte_stream)
             break
         except reedsolo.ReedSolomonError as e:
-            print(offset)
+            print(offset, e)
             offset += 1
     if password is not None:
         decoded_byte_stream = aes256_decrypt(password, decoded_byte_stream, mode="CBC")
