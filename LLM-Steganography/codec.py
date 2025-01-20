@@ -56,6 +56,8 @@ def index_to_byte(indices: list[int], base=16) -> bytes:
         # Convert indices back to binary-encoded string
         base2_alphabet = "01"
         base2_encoded = "".join(base2_alphabet[i] for i in indices)
+        # Truncate to multiple of 8 bits
+        base2_encoded = base2_encoded[:-(len(base2_encoded) % 8)] if len(base2_encoded) % 8 else base2_encoded
         # Split into 8-bit chunks and convert to bytes
         byte_stream = bytes(
             int(base2_encoded[i : i + 8], 2) for i in range(0, len(base2_encoded), 8)
@@ -65,7 +67,9 @@ def index_to_byte(indices: list[int], base=16) -> bytes:
         # Convert indices back to octal-encoded string
         base8_alphabet = "01234567"
         base8_encoded = "".join(base8_alphabet[i] for i in indices)
-        # Split into 3-character chunks (representing octal digits) and convert to bytes
+        # Truncate to multiple of 3 chars
+        base8_encoded = base8_encoded[:-(len(base8_encoded) % 3)] if len(base8_encoded) % 3 else base8_encoded
+        # Split into 3-character chunks and convert to bytes
         byte_stream = bytes(
             int(base8_encoded[i : i + 3], 8) for i in range(0, len(base8_encoded), 3)
         )
@@ -74,18 +78,17 @@ def index_to_byte(indices: list[int], base=16) -> bytes:
         # Convert indices back to base16-encoded string
         base16_alphabet = "0123456789ABCDEF"
         base16_encoded = "".join(base16_alphabet[i] for i in indices)
-        # Decode the base16 string back to bytes
-        byte_stream = base64.b16decode(
-            base16_encoded.upper() + "=" * (len(base16_encoded) % 2)
-        )
+        # Truncate to even length
+        base16_encoded = base16_encoded[:-(len(base16_encoded) % 2)] if len(base16_encoded) % 2 else base16_encoded
+        byte_stream = base64.b16decode(base16_encoded.upper())
         return byte_stream
     elif base == 32:
         # Convert indices back to base32-encoded string
         base32_alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
         base32_encoded = "".join(base32_alphabet[i] for i in indices)
-        # Decode the base32 string back to bytes
-        padding = "=" * ((8 - len(base32_encoded) % 8) % 8)  # Ensure correct padding
-        byte_stream = base64.b32decode(base32_encoded + padding)
+        # Truncate to multiple of 8 chars
+        base32_encoded = base32_encoded[:-(len(base32_encoded) % 8)] if len(base32_encoded) % 8 else base32_encoded
+        byte_stream = base64.b32decode(base32_encoded)
         return byte_stream
     elif base == 64:
         # Convert indices back to base64-encoded string
@@ -93,15 +96,16 @@ def index_to_byte(indices: list[int], base=16) -> bytes:
             "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
         )
         base64_encoded = "".join(base64_alphabet[i] for i in indices)
-        # Decode the base64 string back to bytes
-        padding = "=" * ((4 - len(base64_encoded) % 4) % 4)  # Ensure correct padding
-        byte_stream = base64.b64decode(base64_encoded + padding)
+        # Truncate to multiple of 4 chars
+        base64_encoded = base64_encoded[:-(len(base64_encoded) % 4)] if len(base64_encoded) % 4 else base64_encoded
+        byte_stream = base64.b64decode(base64_encoded)
         return byte_stream
     elif base == 85:
         # Convert indices back to base85-encoded string
         base85_alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!#$%&()*+-;<=>?@^_`{|}~"
         base85_encoded = "".join(base85_alphabet[i] for i in indices)
-        # Decode the base85 string back to bytes
+        # Truncate to multiple of 5 chars
+        base85_encoded = base85_encoded[:-(len(base85_encoded) % 5)] if len(base85_encoded) % 5 else base85_encoded
         byte_stream = base64.b85decode(base85_encoded)
         return byte_stream
     else:
@@ -133,7 +137,7 @@ class ReedSolomonCodec:
     def decode_byte_stream(self, encoded_stream: bytes) -> bytes:
         """
         Decode a Reed-Solomon encoded stream using bit-level sliding window.
-        Handles broken blocks and bit shifts.
+        Handles broken blocks, bit shifts, and trailing garbage data.
         """
         decoded_stream = []
         # Convert bytes to bits for finer granularity
@@ -148,7 +152,10 @@ class ReedSolomonCodec:
             try:
                 # Attempt to decode this chunk
                 decoded_chunk = self.rs.decode(chunk_bytes)[0]
-                decoded_stream.append(decoded_chunk.rstrip(b"\x00"))
+                # Only append non-empty chunks after removing padding
+                cleaned_chunk = decoded_chunk.rstrip(b"\x00")
+                if cleaned_chunk:
+                    decoded_stream.append(cleaned_chunk)
                 # Move to next chunk
                 pos += self.n * 8
             except reedsolo.ReedSolomonError:

@@ -1,6 +1,7 @@
 # %%
 import argparse
 import hashlib
+import logging
 
 import reedsolo
 from aes import aes256_decrypt, aes256_encrypt
@@ -46,7 +47,7 @@ def generate_sentence(string, cut=4, **api_args) -> str:
 
 
 def llm_encode(
-    plaintxt: str, starter: str, password=None, base=2, char_per_index=4, **api_args
+    plaintxt: str, starter: str, password=None, base=16, char_per_index=8, **api_args
 ):
     # Encrypt the plaintext with a password
     byte_stream = bytes_raw(plaintxt)
@@ -78,7 +79,8 @@ def llm_encode(
     return "".join(result)
 
 
-def llm_decode(encoded: str, password=None, base=2, char_per_index=4):
+def llm_decode(encoded: str, password=None, base=16, char_per_index=8):
+    codec = ReedSolomonCodec(8, 6)
     offset = 0
     while offset < len(encoded):
         try:
@@ -99,14 +101,15 @@ def llm_decode(encoded: str, password=None, base=2, char_per_index=4):
                 )
             # basex to byte
             byte_stream = index_to_byte(encoded_list, base=base)
-            codec = ReedSolomonCodec(8, 6)
             decoded_byte_stream = codec.decode_byte_stream(byte_stream)
+            if password is not None:
+                decoded_byte_stream = aes256_decrypt(
+                    password, decoded_byte_stream, mode="CBC"
+                )
+            decrype_str = decoded_byte_stream.decode(encoding="utf-8")
             break
-        except:
+        except Exception as e:
             offset += 1
-    if password is not None:
-        decoded_byte_stream = aes256_decrypt(password, decoded_byte_stream, mode="CBC")
-    decrype_str = decoded_byte_stream.decode(encoding="utf-8")
     return decrype_str
 
 
@@ -157,5 +160,5 @@ if __name__ == "__main__":
             base=args.base,
             char_per_index=args.char_per_index,
         )
-        print(result)
+        print(f"Decoded message: {result}")
         print(save_to_file(result, args.output))
