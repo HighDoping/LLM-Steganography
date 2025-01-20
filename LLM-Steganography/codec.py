@@ -138,7 +138,6 @@ class ReedSolomonCodec:
         decoded_stream = []
         # Convert bytes to bits for finer granularity
         bits = "".join([f"{b:08b}" for b in encoded_stream])
-        print(bits)
         pos = 0
         while pos <= len(bits) - self.n * 8:  # Ensure enough bits for a chunk
             # Convert window of bits back to bytes
@@ -146,8 +145,6 @@ class ReedSolomonCodec:
             chunk_bytes = bytes(
                 int(chunk_bits[i : i + 8], 2) for i in range(0, len(chunk_bits), 8)
             )
-            print(chunk_bytes, pos)
-
             try:
                 # Attempt to decode this chunk
                 decoded_chunk = self.rs.decode(chunk_bytes)[0]

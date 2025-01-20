@@ -46,14 +46,14 @@ def generate_sentence(string, cut=4, **api_args) -> str:
 
 
 def llm_encode(
-    plaintxt: str, starter: str, password=None, base=2, char_per_index=6, **api_args
+    plaintxt: str, starter: str, password=None, base=2, char_per_index=4, **api_args
 ):
     # Encrypt the plaintext with a password
     byte_stream = bytes_raw(plaintxt)
     if password is not None:
         byte_stream = aes256_encrypt(password, byte_stream, mode="CBC")
     # use reed solomon to encode
-    codec = ReedSolomonCodec(8, 7)
+    codec = ReedSolomonCodec(8, 6)
     encoded_list = codec.encode_byte_stream(byte_stream)
     # convert to base64 index
     encoded_index = []
@@ -67,23 +67,18 @@ def llm_encode(
     for index in pbar:
         result_str = "".join(result)
         n = -1
-        n_try = 0
         while n != index:
             new_string = generate_sentence(result_str, cut=char_per_index, **api_args)
             hash = hashlib.sha256(new_string.encode(encoding="utf-8")).hexdigest()
             hash_int = int(hash, 16)
             n = hash_int % base
             pbar.set_postfix_str(f"trying: {new_string}, n:{n}, index:{index}")
-            n_try += 1
-            # if n_try > 10:
-            #     # raise ValueError("Can't find the correct string")
-            #     break
         result.append(new_string)
         print("".join(result))
     return "".join(result)
 
 
-def llm_decode(encoded: str, password=None, base=2, char_per_index=6):
+def llm_decode(encoded: str, password=None, base=2, char_per_index=4):
     offset = 0
     while offset < len(encoded):
         try:
@@ -104,12 +99,10 @@ def llm_decode(encoded: str, password=None, base=2, char_per_index=6):
                 )
             # basex to byte
             byte_stream = index_to_byte(encoded_list, base=base)
-            print(byte_stream)
-            codec = ReedSolomonCodec(8, 7)
+            codec = ReedSolomonCodec(8, 6)
             decoded_byte_stream = codec.decode_byte_stream(byte_stream)
             break
-        except reedsolo.ReedSolomonError as e:
-            print(offset, e)
+        except:
             offset += 1
     if password is not None:
         decoded_byte_stream = aes256_decrypt(password, decoded_byte_stream, mode="CBC")
@@ -132,15 +125,13 @@ if __name__ == "__main__":
     parser.add_argument("output", help="output file")
     parser.add_argument("--starter", default="我", help="starter text")
     parser.add_argument("--password", help="password for encryption")
-    parser.add_argument("--base", type=int, default=2, help="base for encoding")
-    parser.add_argument("--char_per_index", type=int, default=6, help="char per index")
+    parser.add_argument("--base", type=int, default=16, help="base for encoding")
+    parser.add_argument("--char_per_index", type=int, default=8, help="char per index")
     parser.add_argument(
         "--baseurl", default="http://localhost:1234/v1", help="base url"
     )
     parser.add_argument("--apikey", default="lm-studio", help="api key")
-    parser.add_argument(
-        "--model", default="qwen2.5-3b-instruct:2", help="model for completion"
-    )
+    parser.add_argument("--model", default="qwen2.5-0.5b", help="model for completion")
     args = parser.parse_args()
     if args.mode == "encode":
         with open(args.filename, "r", encoding="utf-8") as f:
