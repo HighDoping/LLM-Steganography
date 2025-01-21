@@ -11,7 +11,7 @@ This project is a steganography tool that uses LLMs to hide information in text.
 To encode the hidden text:
 
 ```bash
-python main.py encode text_to_hide.txt output_text.txt --starter "说来话长，" --baseurl http://localhost:1234/v1 --apikey lm-studio --model qwen2.5-0.5b
+python llm_steganography.py encode text_to_hide.txt output_text.txt --starter "说来话长，" --baseurl http://localhost:1234/v1 --apikey lm-studio --model qwen2.5-0.5b
 ```
 
 The encoding process might be stagnant. Some retries are needed.
@@ -19,7 +19,7 @@ The encoding process might be stagnant. Some retries are needed.
 To decode the hidden text:
 
 ```bash
-python main.py decode output_text.txt result.txt 
+python llm_steganography.py decode output_text.txt result.txt 
 ```
 
 Parameters:
