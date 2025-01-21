@@ -4,10 +4,11 @@ import hashlib
 import logging
 
 import reedsolo
-from aes import aes256_decrypt, aes256_encrypt
-from codec import ReedSolomonCodec, byte_to_index, bytes_raw, index_to_byte
-from llmapi import create_completion
 from tqdm import tqdm
+
+from .aes import aes256_decrypt, aes256_encrypt
+from .codec import ReedSolomonCodec, byte_to_index, bytes_raw, index_to_byte
+from .llmapi import create_completion
 
 
 # %%
