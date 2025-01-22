@@ -28,6 +28,11 @@ black = "^24.10.0"
 notebook = "^7.3.2"
 pytest = "^8.3.4"
 
+[project.optional-dependencies]
+cuda = [
+    "torch",
+]
+
 [tool.poetry.dependencies]
 torch = [
     { version = ">=2.5.1+cu124",platform="linux",markers = "extra =='cuda'", source = "pytorch-cuda"},
