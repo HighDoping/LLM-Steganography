@@ -1,8 +1,10 @@
 # %%
 import hashlib
 import logging
+import random
 
 import torch
+from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
@@ -15,6 +17,7 @@ def custom_token_selection(
     temperature=1.0,
     base=16,
     char_per_index=8,
+    random_choice=False,
 ):
     """
     Custom token selection algorithm.
@@ -28,19 +31,28 @@ def custom_token_selection(
         top_k_probs
     )  # Normalize top-k probabilities
 
+    result_list = []
     for i in range(top_k):
         token = top_k_indices[i].item()
         text = tokenizer.decode(token, skip_special_tokens=True)
         # get first n characters
+        if len(text) < char_per_index:
+            continue
         text = text[:char_per_index]
         # get hash
         hash = hashlib.sha256(text.encode(encoding="utf-8")).hexdigest()
         hash_int = int(hash, 16)
         n = hash_int % base
         if n == index_needed:
-            return token, text
-    # If no token is selected, raise an exception
-    raise ValueError("No token selected")
+            if random_choice is False:
+                return token, text
+            else:
+                result_list.append((token, text))
+    if len(result_list) == 0:
+        raise ValueError("No token found")
+    # Randomly select a token from the filtered results
+    token, text = random.choice(result_list)
+    return token, text
 
 
 def native_generate_text(
@@ -51,6 +63,7 @@ def native_generate_text(
     temperature=1.0,
     base=16,
     char_per_index=8,
+    random_choice=False,
 ) -> str:
     """
     Generate text from the model using a custom token selection algorithm.
@@ -89,14 +102,12 @@ def native_generate_text(
             temperature=temperature,
             base=base,
             char_per_index=char_per_index,
+            random_choice=random_choice,
         )
         generated_text += text
-        generated_ids = tokenizer.encode(generated_text, return_tensors="pt").tolist()
-        # Append the new token and update the input
-        input_ids = torch.tensor([generated_ids], device=device)
-
+        input_ids = tokenizer.encode(generated_text, return_tensors="pt").to(device)
         pbar.set_postfix_str(f"got: {text}, index:{index}")
         # Stop if end-of-sequence token is generated
         if next_token == tokenizer.eos_token_id:
-            break
+            raise ValueError("End of sequence token generated")
     return generated_text
