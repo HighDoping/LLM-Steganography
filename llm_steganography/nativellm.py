@@ -74,7 +74,8 @@ def native_generate_text(
 
     generated_ids = input_ids[0].tolist()
     generated_text = tokenizer.decode(generated_ids, skip_special_tokens=True)
-    for index in index_list:
+    pbar = tqdm(index_list, desc="Native Endoding", leave=False)
+    for index in pbar:
         with torch.no_grad():
             # Perform forward pass
             outputs = model(input_ids=input_ids)
@@ -94,6 +95,7 @@ def native_generate_text(
         # Append the new token and update the input
         input_ids = torch.tensor([generated_ids], device=device)
 
+        pbar.set_postfix_str(f"got: {text}, index:{index}")
         # Stop if end-of-sequence token is generated
         if next_token == tokenizer.eos_token_id:
             break

@@ -80,7 +80,7 @@ def api_generate_text(
     result = []
     result.append(starter)
 
-    pbar = tqdm(encoded_index, desc="Encoding", leave=False)
+    pbar = tqdm(encoded_index, desc="API Encoding", leave=False)
     for index in pbar:
         result_str = "".join(result)
         n = -1
