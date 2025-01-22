@@ -58,6 +58,13 @@ Output:
 说来话长，关于我出生后的第2年，有一个关于我“我”不记得的“小人书”，它有三个故事：1.我是一个小坏蛋；2.妈妈在洗衣盆里找零钱时被狗咬伤了；3.妈妈没带钱去商场买玩具，可是在家拿过几个发下来的时候，妈一看就差9块了。后来这个“故事”就变成了“我记住了很多事，但少了
 ```
 
+## TODO
+
+- [ ] VRAM GC for native LLMs
+- [ ] Decoding errors
+- [ ] Line breaks handling
+- [ ] More encoding options
+
 ## Acknowledgements
 
 Inspired by [抽象emoji加密器](https://bgm.tv/group/topic/414391) and [Badness 0 (Apostrophe‛s version)](https://www.youtube.com/watch?v=Y65FRxE7uMc)

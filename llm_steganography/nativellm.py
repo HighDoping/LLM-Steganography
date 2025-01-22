@@ -43,8 +43,8 @@ def multi_token_selection(logits, top_k=5, temperature=1.0, num_samples=2):
 
 
 def generate_multiple_token(
-    prompt,
-    model_name="Qwen/Qwen2.5-0.5B",
+    prompt_tokens,
+    model,
     max_length=50,
     top_k=50,
     temperature=1.0,
@@ -58,13 +58,7 @@ def generate_multiple_token(
         if torch.backends.mps.is_built()
         else "cpu"
     )
-    logging.info(f"Using device: {device}")
-
-    # Load a tokenizer and model
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    model = AutoModelForCausalLM.from_pretrained(model_name)
-    model.to(device)
-    input_ids = tokenizer.encode(prompt, return_tensors="pt").to(device)
+    input_ids = prompt_tokens.to(device)
     model.eval()
 
     generated_ids = input_ids[0].tolist()
@@ -83,7 +77,6 @@ def generate_multiple_token(
         )
         for next_token in next_tokens:
             generated_ids_list.append(generated_ids + [next_token])
-
         for _ in range(max_length):
             for i, generated_ids in enumerate(generated_ids_list):
                 input_ids = torch.tensor([generated_ids], device=device)
@@ -101,53 +94,26 @@ def generate_multiple_token(
 
 
 # %%
-print(generate_multiple_token("说来话长，", max_length=10, top_k=50, num_samples=20))
 
 
-# %%
-def custom_token_selection(
-    logits,
+def multi_token_encoding(
+    text_list,
     index_needed: int,
-    tokenizer,
-    top_k=500,
-    temperature=1.0,
     base=16,
     char_per_index=8,
-    random_choice=False,
 ):
-    """
-    Custom token selection algorithm.
-    """
-    logits = logits / temperature  # Apply temperature scaling
-    probs = torch.softmax(logits, dim=-1)  # Convert logits to probabilities
-    # Perform top-k filtering
-    top_k_probs, top_k_indices = torch.topk(probs, top_k, dim=-1)
-    normalized_probs = top_k_probs / torch.sum(
-        top_k_probs
-    )  # Normalize top-k probabilities
-
-    result_list = []
-    for i in range(top_k):
-        token = top_k_indices[i].item()
-        text = tokenizer.decode(token, skip_special_tokens=True)
-        # get first n characters
+    for text in text_list:
         if len(text) < char_per_index:
+            logging.debug("Text shorter than char_per_index")
             continue
         text = text[:char_per_index]
-        # get hash
         hash = hashlib.sha256(text.encode(encoding="utf-8")).hexdigest()
         hash_int = int(hash, 16)
         n = hash_int % base
+        logging.debug(f"index_needed:{index_needed},hash:{n},text:{text}")
         if n == index_needed:
-            if random_choice is False:
-                return token, text
-            else:
-                result_list.append((token, text))
-    if len(result_list) == 0:
-        raise ValueError("No token found")
-    # Randomly select a token from the filtered results
-    token, text = random.choice(result_list)
-    return token, text
+            return text
+    raise ValueError("No token found")
 
 
 def native_generate_text(
@@ -158,7 +124,6 @@ def native_generate_text(
     temperature=1.0,
     base=16,
     char_per_index=8,
-    random_choice=False,
 ) -> str:
     """
     Generate text from the model using a custom token selection algorithm.
@@ -172,6 +137,8 @@ def native_generate_text(
     )
     logging.info(f"Using device: {device}")
 
+    num_samples = 10  # high enough to get hash collision, ensured by retry
+
     # Load a tokenizer and model
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     model = AutoModelForCausalLM.from_pretrained(model_name)
@@ -182,27 +149,50 @@ def native_generate_text(
 
     generated_ids = input_ids[0].tolist()
     generated_text = tokenizer.decode(generated_ids, skip_special_tokens=True)
-    pbar = tqdm(index_list, desc="Native Endoding", leave=False)
-    for index in pbar:
-        with torch.no_grad():
-            # Perform forward pass
-            outputs = model(input_ids=input_ids)
-            logits = outputs.logits[:, -1, :]  # Extract logits of the last token
-        # Select the next token using the custom algorithm
-        next_token, text = custom_token_selection(
-            logits.squeeze(),
-            index,
-            tokenizer,
-            top_k=top_k,
-            temperature=temperature,
-            base=base,
-            char_per_index=char_per_index,
-            random_choice=random_choice,
-        )
-        generated_text += text
-        input_ids = tokenizer.encode(generated_text, return_tensors="pt").to(device)
-        pbar.set_postfix_str(f"got: {text}, index:{index}")
-        # Stop if end-of-sequence token is generated
-        if next_token == tokenizer.eos_token_id:
-            raise ValueError("End of sequence token generated")
+
+    retry_limit = 20
+
+    for index in tqdm(index_list, desc="Native Encoding", leave=False):
+        for retry in range(retry_limit):
+            try:
+                # Generate multiple token sequences
+                input_ids = tokenizer.encode(generated_text, return_tensors="pt").to(
+                    device
+                )
+                tokens_list = generate_multiple_token(
+                    input_ids,
+                    model=model,
+                    max_length=char_per_index,
+                    top_k=top_k,
+                    temperature=temperature,
+                    start_top_k=top_k,
+                    num_samples=num_samples,
+                )
+
+                # Remove prompt tokens from sequences
+                # get count of elements from tensor
+                input_ids_length = len(input_ids[0])
+                tokens_list = [tokens[input_ids_length:] for tokens in tokens_list]
+                text_list = [
+                    tokenizer.decode(tokens, skip_special_tokens=True)
+                    for tokens in tokens_list
+                ]
+                # Find token matching desired index
+                selected_text = multi_token_encoding(
+                    text_list,
+                    index,
+                    base=base,
+                    char_per_index=char_per_index,
+                )
+                break
+            except ValueError:
+                if retry == retry_limit - 1:
+                    raise ValueError(
+                        f"No valid token found after {retry_limit} retries"
+                    )
+                logging.info(f"No token found, attempt {retry + 1}")
+
+        generated_text += selected_text
+
+        print(generated_text)
     return generated_text

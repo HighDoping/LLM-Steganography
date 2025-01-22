@@ -102,6 +102,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--encode_mode", default="api", help="encode mode, api or native"
     )
+    parser.add_argument("--debug", action="store_true", help="debug mode")
     # api args
     parser.add_argument(
         "--baseurl", default="http://localhost:1234/v1", help="api base url"
@@ -116,13 +117,12 @@ if __name__ == "__main__":
     )
     parser.add_argument("--temperature", type=float, default=1.0, help="temperature")
     parser.add_argument("--top_k", type=int, default=500, help="top k")
-    parser.add_argument(
-        "--random_choice", action="store_true", help="random choice"
-    )
 
     args = parser.parse_args()
 
     # set logging
+    if args.debug == True:
+        logging.basicConfig(level=logging.DEBUG)
     logging.basicConfig(level=logging.INFO)
 
     if args.mode == "encode":
@@ -148,7 +148,6 @@ if __name__ == "__main__":
                 "model_name": args.model_name,
                 "temperature": args.temperature,
                 "top_k": args.top_k,
-                "random_choice": args.random_choice,
             }
             result = llm_encode(
                 text,
@@ -161,7 +160,7 @@ if __name__ == "__main__":
             )
         else:
             raise ValueError("Unknown encode mode")
-        print(result)
+        print(f"Encoded message: {result}")
         print(save_to_file(result, args.output))
     elif args.mode == "decode":
         with open(args.filename, "r", encoding="utf-8") as f:
@@ -173,6 +172,4 @@ if __name__ == "__main__":
             char_per_index=args.char_per_index,
         )
         print(f"Decoded message: {result}")
-        print(save_to_file(result, args.output))
-        print(save_to_file(result, args.output))
         print(save_to_file(result, args.output))
