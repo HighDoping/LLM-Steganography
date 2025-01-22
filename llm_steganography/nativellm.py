@@ -1,83 +1,100 @@
 # %%
+import hashlib
+import logging
+
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-# %%
-device = torch.device(
-    "cuda"
-    if torch.cuda.is_available()
-    else "mps"
-    if torch.backends.mps.is_built()
-    else "cpu"
-)
-print(device)
 
 # %%
-# Load a tokenizer and model
-model_name = "gpt2"  # Replace with the model you want to use
-tokenizer = AutoTokenizer.from_pretrained(model_name)
-model = AutoModelForCausalLM.from_pretrained(model_name)
-
-# Use MPS (Metal Performance Shaders) backend for Mac M-series acceleration
-
-model.to(device)
-
-
-# %%
-def custom_token_selection(logits, top_k=5, temperature=1.0):
+def custom_token_selection(
+    logits,
+    index_needed: int,
+    tokenizer,
+    top_k=500,
+    temperature=1.0,
+    base=16,
+    char_per_index=8,
+):
     """
     Custom token selection algorithm.
     Selects tokens based on a combination of top-k sampling and temperature scaling.
     """
     logits = logits / temperature  # Apply temperature scaling
     probs = torch.softmax(logits, dim=-1)  # Convert logits to probabilities
-
     # Perform top-k filtering
     top_k_probs, top_k_indices = torch.topk(probs, top_k, dim=-1)
     normalized_probs = top_k_probs / torch.sum(
         top_k_probs
     )  # Normalize top-k probabilities
 
-    # Sample a token from the top-k probabilities
-    sampled_index = torch.multinomial(normalized_probs, num_samples=1).item()
-    selected_token = top_k_indices[sampled_index].item()
+    for i in range(top_k):
+        token = top_k_indices[i].item()
+        text = tokenizer.decode(token, skip_special_tokens=True)
+        # get first n characters
+        text = text[:char_per_index]
+        # get hash
+        hash = hashlib.sha256(text.encode(encoding="utf-8")).hexdigest()
+        hash_int = int(hash, 16)
+        n = hash_int % base
+        if n == index_needed:
+            return token, text
+    # If no token is selected, raise an exception
+    raise ValueError("No token selected")
 
-    return selected_token
 
-
-def generate_text(prompt, max_length=50, top_k=5, temperature=1.0):
+def native_generate_text(
+    prompt: str,
+    index_list: list[int],
+    model_name="Qwen/Qwen2.5-0.5B",
+    top_k=500,
+    temperature=1.0,
+    base=16,
+    char_per_index=8,
+) -> str:
     """
     Generate text from the model using a custom token selection algorithm.
     """
+    device = torch.device(
+        "cuda"
+        if torch.cuda.is_available()
+        else "mps"
+        if torch.backends.mps.is_built()
+        else "cpu"
+    )
+    logging.info(f"Using device: {device}")
+
+    # Load a tokenizer and model
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    model = AutoModelForCausalLM.from_pretrained(model_name)
+
+    model.to(device)
     input_ids = tokenizer.encode(prompt, return_tensors="pt").to(device)
     model.eval()
 
     generated_ids = input_ids[0].tolist()
-    for _ in range(max_length):
+    generated_text = tokenizer.decode(generated_ids, skip_special_tokens=True)
+    for index in index_list:
         with torch.no_grad():
             # Perform forward pass
             outputs = model(input_ids=input_ids)
             logits = outputs.logits[:, -1, :]  # Extract logits of the last token
-
         # Select the next token using the custom algorithm
-        next_token = custom_token_selection(
-            logits.squeeze(), top_k=top_k, temperature=temperature
+        next_token, text = custom_token_selection(
+            logits.squeeze(),
+            index,
+            tokenizer,
+            top_k=top_k,
+            temperature=temperature,
+            base=base,
+            char_per_index=char_per_index,
         )
-        generated_ids.append(next_token)
-
+        generated_text += text
+        generated_ids = tokenizer.encode(generated_text, return_tensors="pt").tolist()
         # Append the new token and update the input
         input_ids = torch.tensor([generated_ids], device=device)
 
         # Stop if end-of-sequence token is generated
         if next_token == tokenizer.eos_token_id:
             break
-
-    return tokenizer.decode(generated_ids, skip_special_tokens=True)
-
-
-# Example usage
-if __name__ == "__main__":
-    prompt = "Once upon a time"
-    generated_text = generate_text(prompt, max_length=100, top_k=10, temperature=0.7)
-    print("Generated Text:")
-    print(generated_text)
+    return generated_text

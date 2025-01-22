@@ -3,52 +3,19 @@ import argparse
 import hashlib
 import logging
 
-import reedsolo
-from tqdm import tqdm
-
 from .aes import aes256_decrypt, aes256_encrypt
 from .codec import ReedSolomonCodec, byte_to_index, bytes_raw, index_to_byte
-from .llmapi import create_completion
-
-
-# %%
-# Function to split the sentence
-def split_sentence(text: str):
-    punctuation = {".", "!", "?", ",", "。", "，", ";", "；", "？"}
-    result = []
-    temp = ""
-
-    for char in text:
-        temp += char  # Add character to the current segment
-        if char in punctuation:  # If it's a punctuation mark
-            # Add the segment to the result and reset temp
-            result.append(temp.strip())
-            temp = ""
-
-    # Add any remaining part after the last punctuation
-    if temp.strip():
-        result.append(temp.strip())
-
-    return result
-
-
-def generate_sentence(string, cut=4, **api_args) -> str:
-    while True:
-        new_string = create_completion(string, **api_args)
-        if cut <= -1:
-            return new_string
-        if cut == 0:
-            sentences = split_sentence(new_string)
-            # if len(sentences) > 1:
-            return sentences[0]
-        # return first 4 char
-        else:
-            if len(new_string) >= cut:
-                return new_string[:cut]
 
 
 def llm_encode(
-    plaintxt: str, starter: str, password=None, base=16, char_per_index=8, **api_args
+    plaintxt: str,
+    starter: str,
+    mode="api",
+    password=None,
+    base=16,
+    char_per_index=8,
+    api_args={},
+    native_args={},
 ):
     # Encrypt the plaintext with a password
     byte_stream = bytes_raw(plaintxt)
@@ -61,23 +28,24 @@ def llm_encode(
     encoded_index = []
     for chunk in encoded_list:
         encoded_index.extend(byte_to_index(chunk, base=base))
+    # generate text
+    if mode == "api":
+        from .llmapi import api_generate_text
 
-    result = []
-    result.append(starter)
+        return api_generate_text(
+            encoded_index, starter, base=base, char_per_index=char_per_index, **api_args
+        )
+    else:
+        if mode == "native":
+            from .nativellm import native_generate_text
 
-    pbar = tqdm(encoded_index, desc="Encoding", leave=False)
-    for index in pbar:
-        result_str = "".join(result)
-        n = -1
-        while n != index:
-            new_string = generate_sentence(result_str, cut=char_per_index, **api_args)
-            hash = hashlib.sha256(new_string.encode(encoding="utf-8")).hexdigest()
-            hash_int = int(hash, 16)
-            n = hash_int % base
-            pbar.set_postfix_str(f"trying: {new_string}, n:{n}, index:{index}")
-        result.append(new_string)
-        print("".join(result))
-    return "".join(result)
+            return native_generate_text(
+                starter,
+                encoded_index,
+                base=base,
+                char_per_index=char_per_index,
+                **native_args,
+            )
 
 
 def llm_decode(encoded: str, password=None, base=16, char_per_index=8):
@@ -121,35 +89,70 @@ def save_to_file(text, filename):
 
 
 # %%
-# %%
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("mode", choices=["encode", "decode"], help="encode or decode")
     parser.add_argument("filename", help="file to encode or decode")
     parser.add_argument("output", help="output file")
+
     parser.add_argument("--starter", default="我", help="starter text")
     parser.add_argument("--password", help="password for encryption")
     parser.add_argument("--base", type=int, default=16, help="base for encoding")
     parser.add_argument("--char_per_index", type=int, default=8, help="char per index")
     parser.add_argument(
-        "--baseurl", default="http://localhost:1234/v1", help="base url"
+        "--encode_mode", default="api", help="encode mode, api or native"
+    )
+    # api args
+    parser.add_argument(
+        "--baseurl", default="http://localhost:1234/v1", help="api base url"
     )
     parser.add_argument("--apikey", default="lm-studio", help="api key")
-    parser.add_argument("--model", default="qwen2.5-0.5b", help="model for completion")
+    parser.add_argument(
+        "--model", default="qwen2.5-0.5b", help="api model for completion"
+    )
+    # native args
+    parser.add_argument(
+        "--model_name", default="Qwen/Qwen2.5-0.5B", help="native model for completion"
+    )
+    parser.add_argument("--temperature", type=float, default=1.0, help="temperature")
+    parser.add_argument("--top_k", type=int, default=500, help="top k")
+
     args = parser.parse_args()
     if args.mode == "encode":
         with open(args.filename, "r", encoding="utf-8") as f:
             text = f.read()
-        result = llm_encode(
-            text,
-            password=args.password,
-            base=args.base,
-            char_per_index=args.char_per_index,
-            starter=args.starter,
-            base_url=args.baseurl,
-            api_key=args.apikey,
-            model=args.model,
-        )
+        if args.encode_mode == "api":
+            api_args = {
+                "baseurl": args.baseurl,
+                "apikey": args.apikey,
+                "model": args.model,
+            }
+            result = llm_encode(
+                text,
+                password=args.password,
+                base=args.base,
+                char_per_index=args.char_per_index,
+                starter=args.starter,
+                mode="api",
+                api_args=api_args,
+            )
+        elif args.encode_mode == "native":
+            native_args = {
+                "model_name": args.model_name,
+                "temperature": args.temperature,
+                "top_k": args.top_k,
+            }
+            result = llm_encode(
+                text,
+                password=args.password,
+                base=args.base,
+                char_per_index=args.char_per_index,
+                starter=args.starter,
+                mode="native",
+                native_args=native_args,
+            )
+        else:
+            raise ValueError("Unknown encode mode")
         print(result)
         print(save_to_file(result, args.output))
     elif args.mode == "decode":
@@ -162,4 +165,6 @@ if __name__ == "__main__":
             char_per_index=args.char_per_index,
         )
         print(f"Decoded message: {result}")
+        print(save_to_file(result, args.output))
+        print(save_to_file(result, args.output))
         print(save_to_file(result, args.output))
