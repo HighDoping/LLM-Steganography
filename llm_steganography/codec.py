@@ -23,6 +23,16 @@ def byte_to_index(byte_stream: bytes, base=16) -> list[int]:
         base2_encoded = "".join([f"{b:0>8b}" for b in byte_stream])
         base2_alphabet = "01"
         return [base2_alphabet.index(c) for c in base2_encoded]
+    if base == 4:
+        # to quaternary
+        base4_encoded = ""
+        for b in byte_stream:
+            # Convert each byte to three base-4 digits (since 8 bits require 3 base-4 digits)
+            base4_encoded += (
+                f"{(b >> 6) & 0x3}{(b >> 4) & 0x3}{(b >> 2) & 0x3}{b & 0x3}"
+            )
+        base4_alphabet = "0123"
+        return [base4_alphabet.index(c) for c in base4_encoded]
     if base == 8:
         # to octal
         base8_encoded = "".join([f"{oct(b)[2:]:0>3}" for b in byte_stream])
@@ -48,7 +58,9 @@ def byte_to_index(byte_stream: bytes, base=16) -> list[int]:
         base85_alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!#$%&()*+-;<=>?@^_`{|}~"
         return [base85_alphabet.index(c) for c in base85_encoded]
     else:
-        raise ValueError("Invalid base selected. Use '16','32' or '64'.")
+        raise ValueError(
+            "Invalid base selected. Available options: 2, 4, 8, 16, 32, 64, 85"
+        )
 
 
 def index_to_byte(indices: list[int], base=16) -> bytes:
@@ -56,19 +68,35 @@ def index_to_byte(indices: list[int], base=16) -> bytes:
         # Convert indices back to binary-encoded string
         base2_alphabet = "01"
         base2_encoded = "".join(base2_alphabet[i] for i in indices)
-        # Truncate to multiple of 8 bits
-        base2_encoded = base2_encoded[:-(len(base2_encoded) % 8)] if len(base2_encoded) % 8 else base2_encoded
+        # Pad to multiple of 8 bits
+        padding_length = (8 - len(base2_encoded) % 8) % 8
+        base2_encoded = base2_encoded + "0" * padding_length
         # Split into 8-bit chunks and convert to bytes
         byte_stream = bytes(
             int(base2_encoded[i : i + 8], 2) for i in range(0, len(base2_encoded), 8)
+        )
+        return byte_stream
+    elif base == 4:
+        # Convert indices back to quaternary-encoded string
+        base4_alphabet = "0123"
+        base4_encoded = "".join(base4_alphabet[i] for i in indices)
+        # Pad to multiple of 4 chars
+        padding_length = (4 - len(base4_encoded) % 4) % 4
+        base4_encoded = base4_encoded + "0" * padding_length
+        # Combine four base-4 digits to form bytes
+        byte_stream = bytes(
+            (int(base4_encoded[i], 4) << 6) | (int(base4_encoded[i + 1], 4) << 4) |
+            (int(base4_encoded[i + 2], 4) << 2) | int(base4_encoded[i + 3], 4)
+            for i in range(0, len(base4_encoded), 4)
         )
         return byte_stream
     elif base == 8:
         # Convert indices back to octal-encoded string
         base8_alphabet = "01234567"
         base8_encoded = "".join(base8_alphabet[i] for i in indices)
-        # Truncate to multiple of 3 chars
-        base8_encoded = base8_encoded[:-(len(base8_encoded) % 3)] if len(base8_encoded) % 3 else base8_encoded
+        # Pad to multiple of 3 chars
+        padding_length = (3 - len(base8_encoded) % 3) % 3
+        base8_encoded = base8_encoded + "0" * padding_length
         # Split into 3-character chunks and convert to bytes
         byte_stream = bytes(
             int(base8_encoded[i : i + 3], 8) for i in range(0, len(base8_encoded), 3)
@@ -78,16 +106,18 @@ def index_to_byte(indices: list[int], base=16) -> bytes:
         # Convert indices back to base16-encoded string
         base16_alphabet = "0123456789ABCDEF"
         base16_encoded = "".join(base16_alphabet[i] for i in indices)
-        # Truncate to even length
-        base16_encoded = base16_encoded[:-(len(base16_encoded) % 2)] if len(base16_encoded) % 2 else base16_encoded
+        # Pad to multiple of 2 chars
+        padding_length = (2 - len(base16_encoded) % 2) % 2
+        base16_encoded = base16_encoded + "0" * padding_length
         byte_stream = base64.b16decode(base16_encoded.upper())
         return byte_stream
     elif base == 32:
         # Convert indices back to base32-encoded string
         base32_alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
         base32_encoded = "".join(base32_alphabet[i] for i in indices)
-        # Truncate to multiple of 8 chars
-        base32_encoded = base32_encoded[:-(len(base32_encoded) % 8)] if len(base32_encoded) % 8 else base32_encoded
+        # Pad to multiple of 8 chars
+        padding_length = (8 - len(base32_encoded) % 8) % 8
+        base32_encoded = base32_encoded + "=" * padding_length
         byte_stream = base64.b32decode(base32_encoded)
         return byte_stream
     elif base == 64:
@@ -96,21 +126,25 @@ def index_to_byte(indices: list[int], base=16) -> bytes:
             "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
         )
         base64_encoded = "".join(base64_alphabet[i] for i in indices)
-        # Truncate to multiple of 4 chars
-        base64_encoded = base64_encoded[:-(len(base64_encoded) % 4)] if len(base64_encoded) % 4 else base64_encoded
+        # Pad to multiple of 4 chars
+        padding_length = (4 - len(base64_encoded) % 4) % 4
+        base64_encoded = base64_encoded + "=" * padding_length
         byte_stream = base64.b64decode(base64_encoded)
         return byte_stream
     elif base == 85:
         # Convert indices back to base85-encoded string
         base85_alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!#$%&()*+-;<=>?@^_`{|}~"
         base85_encoded = "".join(base85_alphabet[i] for i in indices)
-        # Truncate to multiple of 5 chars
-        base85_encoded = base85_encoded[:-(len(base85_encoded) % 5)] if len(base85_encoded) % 5 else base85_encoded
+        # Pad to multiple of 5 chars
+        padding_length = (5 - len(base85_encoded) % 5) % 5
+        base85_encoded = (
+            base85_encoded + "~" * padding_length
+        )  # Using ~ as padding for base85
         byte_stream = base64.b85decode(base85_encoded)
         return byte_stream
     else:
         raise ValueError(
-            "Invalid base selected. Use '2', '8', '16', '32', '64', or '85'."
+            "Invalid base selected. Available options: 2, 4, 8, 16, 32, 64, 85"
         )
 
 
