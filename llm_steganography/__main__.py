@@ -51,8 +51,9 @@ def llm_encode(
     # Encode using Reed-Solomon
     codec = ReedSolomonCodec(8, 6)
     encoded_index = []
-    for chunk in codec.encode_byte_stream(byte_stream):
-        encoded_index.extend(byte_to_index(chunk, base=base))
+    encoded_index = byte_to_index(
+        b"".join(codec.encode_byte_stream(byte_stream)), base=base
+    )
 
     # Generate text using specified mode
     if mode == "api":
