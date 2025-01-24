@@ -153,6 +153,7 @@ def native_generate_text(
                 # run gc
                 gc.collect()
                 torch.cuda.empty_cache()
+                torch.mps.empty_cache()
                 # Generate multiple token sequences
                 input_ids = tokenizer.encode(generated_text, return_tensors="pt").to(
                     device
