@@ -60,7 +60,6 @@ Output:
 
 ## TODO
 
-- [ ] VRAM GC for native LLMs
 - [ ] Decoding errors
 - [ ] Line breaks handling
 - [ ] More encoding options

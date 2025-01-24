@@ -1,4 +1,5 @@
 # %%
+import gc
 import hashlib
 import logging
 import random
@@ -45,19 +46,13 @@ def multi_token_selection(logits, top_k=5, temperature=1.0, num_samples=2):
 def generate_multiple_token(
     prompt_tokens,
     model,
+    device,
     max_length=50,
     top_k=50,
     temperature=1.0,
     start_top_k=50,
     num_samples=20,
 ):
-    device = torch.device(
-        "cuda"
-        if torch.cuda.is_available()
-        else "mps"
-        if torch.backends.mps.is_built()
-        else "cpu"
-    )
     input_ids = prompt_tokens.to(device)
     model.eval()
 
@@ -155,6 +150,9 @@ def native_generate_text(
     for index in tqdm(index_list, desc="Native Encoding", leave=False):
         for retry in range(retry_limit):
             try:
+                # run gc
+                gc.collect()
+                torch.cuda.empty_cache()
                 # Generate multiple token sequences
                 input_ids = tokenizer.encode(generated_text, return_tensors="pt").to(
                     device
@@ -162,6 +160,7 @@ def native_generate_text(
                 tokens_list = generate_multiple_token(
                     input_ids,
                     model=model,
+                    device=device,
                     max_length=char_per_index,
                     top_k=top_k,
                     temperature=temperature,
