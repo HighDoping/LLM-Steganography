@@ -39,32 +39,32 @@ def aes256_encrypt(password: str, plaintext: bytes, mode="CBC") -> bytes:
         # Return the base64-encoded salt, IV, and ciphertext as a single string
         encrypted_data = base64.b64encode(salt + iv + ciphertext)
 
-    elif mode == "GCM":
-        # Generate a random nonce (12 bytes is standard for GCM)
-        nonce = os.urandom(12)
+    # elif mode == "GCM":
+    #     # Generate a random nonce (12 bytes is standard for GCM)
+    #     nonce = os.urandom(12)
 
-        # Create the AES cipher in GCM mode
-        cipher = Cipher(
-            algorithms.AES(key), modes.GCM(nonce), backend=default_backend()
-        )
-        encryptor = cipher.encryptor()
+    #     # Create the AES cipher in GCM mode
+    #     cipher = Cipher(
+    #         algorithms.AES(key), modes.GCM(nonce), backend=default_backend()
+    #     )
+    #     encryptor = cipher.encryptor()
 
-        # Encrypt the data
-        ciphertext = encryptor.update(plaintext) + encryptor.finalize()
+    #     # Encrypt the data
+    #     ciphertext = encryptor.update(plaintext) + encryptor.finalize()
 
-        # Include the GCM authentication tag
-        tag = encryptor.tag
+    #     # Include the GCM authentication tag
+    #     tag = encryptor.tag
 
-        # Return the base64-encoded salt, nonce, tag, and ciphertext as a single string
-        encrypted_data = base64.b64encode(salt + nonce + tag + ciphertext)
+    #     # Return the base64-encoded salt, nonce, tag, and ciphertext as a single string
+    #     encrypted_data = base64.b64encode(salt + nonce + tag + ciphertext)
 
     else:
-        raise ValueError("Invalid mode selected. Use 'CBC' or 'GCM'.")
+        raise ValueError("Invalid mode selected. Use 'CBC'.")
 
     return encrypted_data
 
 
-def aes256_decrypt(password: str, encrypted_data: str, mode="CBC") -> bytes:
+def aes256_decrypt(password: str, encrypted_data: bytes, mode="CBC") -> bytes:
     # Decode the base64-encoded data
     encrypted_data = base64.b64decode(encrypted_data)
 
@@ -96,31 +96,31 @@ def aes256_decrypt(password: str, encrypted_data: str, mode="CBC") -> bytes:
         pad_length = decrypted_data[-1]
         decrypted_data = decrypted_data[:-pad_length]
 
-    elif mode == "GCM":
-        nonce = encrypted_data[16:28]  # Nonce is 12 bytes
-        tag = encrypted_data[28:44]  # Tag is 16 bytes
-        ciphertext = encrypted_data[44:]
+    # elif mode == "GCM":
+    #     nonce = encrypted_data[16:28]  # Nonce is 12 bytes
+    #     tag = encrypted_data[28:44]  # Tag is 16 bytes
+    #     ciphertext = encrypted_data[44:]
 
-        # Derive the encryption key using PBKDF2
-        kdf = PBKDF2HMAC(
-            algorithm=hashes.SHA256(),
-            length=32,
-            salt=salt,
-            iterations=100000,
-            backend=default_backend(),
-        )
-        key = kdf.derive(password.encode())
+    #     # Derive the encryption key using PBKDF2
+    #     kdf = PBKDF2HMAC(
+    #         algorithm=hashes.SHA256(),
+    #         length=32,
+    #         salt=salt,
+    #         iterations=100000,
+    #         backend=default_backend(),
+    #     )
+    #     key = kdf.derive(password.encode())
 
-        # Create the AES cipher in GCM mode for decryption
-        cipher = Cipher(
-            algorithms.AES(key), modes.GCM(nonce, tag), backend=default_backend()
-        )
-        decryptor = cipher.decryptor()
+    #     # Create the AES cipher in GCM mode for decryption
+    #     cipher = Cipher(
+    #         algorithms.AES(key), modes.GCM(nonce, tag), backend=default_backend()
+    #     )
+    #     decryptor = cipher.decryptor()
 
-        # Decrypt the ciphertext
-        decrypted_data = decryptor.update(ciphertext) + decryptor.finalize()
+    #     # Decrypt the ciphertext
+    #     decrypted_data = decryptor.update(ciphertext) + decryptor.finalize()
 
     else:
-        raise ValueError("Invalid mode selected. Use 'CBC' or 'GCM'.")
+        raise ValueError("Invalid mode selected. Use 'CBC'.")
 
     return decrypted_data
