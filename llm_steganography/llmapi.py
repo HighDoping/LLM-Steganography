@@ -61,7 +61,7 @@ def split_sentence(text: str):
 
 
 def api_generate_text(
-    encoded_index, starter, base=16, char_per_index=8, **api_args
+    encoded_index, prompt, base=16, char_per_index=8, **api_args
 ) -> str:
     def api_generate_sentence(string, cut=4, **api_args) -> str:
         while True:
@@ -77,8 +77,9 @@ def api_generate_text(
                 if len(new_string) >= cut:
                     return new_string[:cut]
 
+    api_args["max_tokens"] = char_per_index+2
     result = []
-    result.append(starter)
+    result.append(prompt)
 
     pbar = tqdm(encoded_index, desc="API Encoding", leave=False)
     for index in pbar:

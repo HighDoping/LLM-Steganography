@@ -4,39 +4,73 @@ Steganography with the help of LLMs.
 
 ## Introduction
 
-This project is a steganography tool that uses LLMs to hide information in text. The tool is designed to be used with OpenAI compatible `/v1/completions` APIs. Since a huge amount of tokens are consumed, it's better to be used with a self-hosted model.  
+This project is a steganography tool that uses LLMs to hide information in text.
+
+In API encoding mode, the tool works with OpenAI compatible `/v1/completions` APIs. Since a huge amount of tokens are consumed, it's better to be used with a self-hosted model.  
+
+In native encoding mode, the tool works with Hugging Face Transformers. It has faster token selection speed and higher success rate, but requires a powerful local machine.
+
+The decoding does not require model access.
 
 ## Usage
 
-To encode the hidden text:
+To install the package, run:
 
 ```bash
-python llm_steganography.py encode text_to_hide.txt output_text.txt --starter "说来话长，" --baseurl http://localhost:1234/v1 --apikey lm-studio --model qwen2.5-0.5b
+poetry install
+```
+
+To install with CUDA support, run:
+
+```bash
+poetry install --extras cuda
+```
+
+To encode the hidden text with LLM API:
+
+```bash
+python -m llm_steganography encode text_to_hide.txt output_text.txt --encode_mode api --prompt "说来话长，" --baseurl http://localhost:1234/v1 --apikey lm-studio --model qwen2.5-0.5b
 ```
 
 The encoding process might be stagnant. Some retries are needed.
 
+To encode the hidden text with native LLM:
+
+```bash
+python -m llm_steganography encode text_to_hide.txt output_text.txt --encode_mode native --prompt "说来话长，" --model Qwen/Qwen2.5-0.5B --top_k 50
+```
+
 To decode the hidden text:
 
 ```bash
-python llm_steganography.py decode output_text.txt result.txt 
+python -m llm_steganography decode output_text.txt result.txt 
 ```
 
 Parameters:
 
-- `--starter`  to set the starter text. The starter text is used as the beginning of the output text.
+- `mode` Either `encode` or `decode`. Required.
 
-- `--password` to set the password for the hidden text. The password is used to encrypt the hidden text.
+- `input` Input file path. Required.
 
-- `--base` to set the internal encoding base. Higher base shortens the text needed for encoding but with slower speed(less chance). Default: 16
+- `output` Output file path. Required.
 
-- `--char_per_index` to set how many characters are used for encoding one bit. Lower number can shorten the output text, but with higher chances that LLM stagnates at the same token. Default: 8
+- `--encode_mode` Encoding mode, either 'api' or 'native'. Used in encoding.
 
-- `--baseurl` to set the base URL of the API.
+- `--prompt` Text that the generated output should begin with. Used in encoding.
 
-- `--apikey`  to set the API key.
+- `--password` Password for encryption. Used in encoding. Optional.
 
-- `--model` to set the model name for the API.
+- `--base` Number base for internal encoding. Higher base means shorter text but slower speed and lower success rate. Used in both encoding and decoding. Default: 16. Available: 2, 4, 8, 16, 32, 64, 85.
+
+- `--char_per_index` Characters used to encode one bit. Lower values mean shorter output but higher chance of LLM getting stuck. Used in both encoding and decoding. Default: 8.
+
+- `--baseurl` Base URL for the API endpoint. Required for API encoding mode.
+
+- `--apikey` API key for authentication. Required for API encoding mode.
+
+- `--model` Model name/path. Required for both API and native encoding modes.
+
+- `--top_k` Top K sampling parameter for native mode. Default: 50.
 
 ## Example
 
@@ -63,6 +97,7 @@ Output:
 - [ ] Decoding errors
 - [ ] Line breaks handling
 - [ ] More encoding options
+- [ ] Decoding webpage
 
 ## Acknowledgements
 

@@ -26,20 +26,17 @@ def single_token_selection(logits, top_k=5, temperature=1.0):
     return selected_token
 
 
-def multi_token_selection(logits, top_k=5, temperature=1.0, num_samples=2):
+def multi_token_selection(logits, top_k=5, temperature=1.0):
     logits = logits / temperature  # Apply temperature scaling
     probs = torch.softmax(logits, dim=-1)  # Convert logits to probabilities
 
     # Perform top-k filtering
     top_k_probs, top_k_indices = torch.topk(probs, top_k, dim=-1)
-    normalized_probs = top_k_probs / torch.sum(
-        top_k_probs
-    )  # Normalize top-k probabilities
-    selected_tokens = []
+    # normalized_probs = top_k_probs / torch.sum(
+    #     top_k_probs
+    # )  # Normalize top-k probabilities
     # Perform multinomial sampling for all samples at once
-    selected_tokens = top_k_indices[
-        torch.multinomial(normalized_probs, num_samples=num_samples)
-    ].tolist()
+    selected_tokens = top_k_indices.tolist()
     return selected_tokens
 
 
@@ -51,7 +48,6 @@ def generate_multiple_token(
     top_k=50,
     temperature=1.0,
     start_top_k=50,
-    num_samples=20,
 ):
     input_ids = prompt_tokens.to(device)
     model.eval()
@@ -65,10 +61,7 @@ def generate_multiple_token(
         logits = outputs.logits[:, -1, :]  # Extract logits of the last token
 
         next_tokens = multi_token_selection(
-            logits.squeeze(),
-            top_k=start_top_k,
-            temperature=temperature,
-            num_samples=num_samples,
+            logits.squeeze(), top_k=start_top_k, temperature=temperature
         )
         for next_token in next_tokens:
             generated_ids_list.append(generated_ids + [next_token])
@@ -114,11 +107,12 @@ def multi_token_encoding(
 def native_generate_text(
     prompt: str,
     index_list: list[int],
-    model_name="Qwen/Qwen2.5-0.5B",
+    model="Qwen/Qwen2.5-0.5B",
     top_k=500,
     temperature=1.0,
     base=16,
     char_per_index=8,
+    retry_limit=20,
 ) -> str:
     """
     Generate text from the model using a custom token selection algorithm.
@@ -132,11 +126,9 @@ def native_generate_text(
     )
     logging.info(f"Using device: {device}")
 
-    num_samples = 10  # high enough to get hash collision, ensured by retry
-
     # Load a tokenizer and model
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    model = AutoModelForCausalLM.from_pretrained(model_name)
+    tokenizer = AutoTokenizer.from_pretrained(model)
+    model = AutoModelForCausalLM.from_pretrained(model)
 
     model.to(device)
     input_ids = tokenizer.encode(prompt, return_tensors="pt").to(device)
@@ -144,8 +136,6 @@ def native_generate_text(
 
     generated_ids = input_ids[0].tolist()
     generated_text = tokenizer.decode(generated_ids, skip_special_tokens=True)
-
-    retry_limit = 20
 
     for index in tqdm(index_list, desc="Native Encoding", leave=False):
         for retry in range(retry_limit):
@@ -162,11 +152,10 @@ def native_generate_text(
                     input_ids,
                     model=model,
                     device=device,
-                    max_length=char_per_index,
+                    max_length=char_per_index + 2,
                     top_k=top_k,
                     temperature=temperature,
                     start_top_k=top_k,
-                    num_samples=num_samples,
                 )
 
                 # Remove prompt tokens from sequences
@@ -190,9 +179,9 @@ def native_generate_text(
                     raise ValueError(
                         f"No valid token found after {retry_limit} retries"
                     )
-                logging.info(f"No token found, attempt {retry + 1}")
+                logging.info(f"No valid token found, attempt {retry + 1}")
 
         generated_text += selected_text
 
-        print(generated_text)
+        logging.info(f"Generated: {generated_text}")
     return generated_text

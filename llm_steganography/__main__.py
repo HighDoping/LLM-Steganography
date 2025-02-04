@@ -13,7 +13,7 @@ from llm_steganography.codec import (
 
 def llm_encode(
     plaintxt: str,
-    starter: str,
+    prompt: str,
     mode="api",
     password=None,
     base=16,
@@ -27,7 +27,7 @@ def llm_encode(
     or native LLM model.
     Args:
         plaintxt (str): The plaintext message to encode.
-        starter (str): Initial text prompt to start the LLM generation.
+        prompt (str): Initial text prompt to start the LLM generation.
         mode (str, optional): Generation mode - either "api" or "native". Defaults to "api".
         password (str, optional): Password for AES-256 encryption. If None, no encryption is used.
         base (int, optional): Base for encoding indices. Defaults to 16.
@@ -60,13 +60,13 @@ def llm_encode(
         from .llmapi import api_generate_text
 
         return api_generate_text(
-            encoded_index, starter, base=base, char_per_index=char_per_index, **api_args
+            encoded_index, prompt, base=base, char_per_index=char_per_index, **api_args
         )
     elif mode == "native":
         from .nativellm import native_generate_text
 
         return native_generate_text(
-            starter,
+            prompt,
             encoded_index,
             base=base,
             char_per_index=char_per_index,
@@ -130,86 +130,107 @@ def save_to_file(text, filename):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("mode", choices=["encode", "decode"], help="encode or decode")
-    parser.add_argument("filename", help="file to encode or decode")
-    parser.add_argument("output", help="output file")
+    parser = argparse.ArgumentParser(description="LLM Steganography Tool")
 
-    parser.add_argument("--starter", default="我", help="starter text")
-    parser.add_argument("--password", help="password for encryption")
-    parser.add_argument("--base", type=int, default=16, help="base for encoding")
-    parser.add_argument("--char_per_index", type=int, default=8, help="char per index")
+    # Required arguments
     parser.add_argument(
-        "--encode_mode", default="api", help="encode mode, api or native"
+        "mode", choices=["encode", "decode"], help="encode or decode mode"
     )
-    parser.add_argument("--debug", action="store_true", help="debug mode")
-    # api args
-    parser.add_argument(
-        "--baseurl", default="http://localhost:1234/v1", help="api base url"
-    )
-    parser.add_argument("--apikey", default="lm-studio", help="api key")
-    parser.add_argument(
-        "--model", default="qwen2.5-0.5b", help="api model for completion"
-    )
-    # native args
-    parser.add_argument(
-        "--model_name", default="Qwen/Qwen2.5-0.5B", help="native model for completion"
-    )
-    parser.add_argument("--temperature", type=float, default=1.0, help="temperature")
-    parser.add_argument("--top_k", type=int, default=500, help="top k")
+    parser.add_argument("input", help="input file path")
+    parser.add_argument("output", help="output file path")
 
+    # General options
+    general_group = parser.add_argument_group("General Options")
+    general_group.add_argument("--password", help="password for encryption")
+    general_group.add_argument("--base", type=int, default=16, help="base for encoding")
+    general_group.add_argument(
+        "--char_per_index", type=int, default=8, help="characters per index"
+    )
+    general_group.add_argument(
+        "--debug", action="store_true", help="enable debug logging"
+    )
+
+    # Encoding specific options
+    encode_group = parser.add_argument_group("Encoding Options")
+    encode_group.add_argument(
+        "--prompt", default="说来话长，", help="prompt text for encoding"
+    )
+    encode_group.add_argument(
+        "--encode_mode", default="api", choices=["api", "native"], help="encoding mode"
+    )
+    encode_group.add_argument(
+        "--model",
+        default="Qwen/Qwen2.5-0.5B",
+        help="model path/name, used by both API and native mode",
+    )
+
+    encode_group.add_argument(
+        "--temperature",
+        type=float,
+        default=0.7,
+        help="sampling temperature, used by both API and native mode",
+    )
+
+    # API mode options
+    api_group = parser.add_argument_group("API Mode Options")
+    api_group.add_argument(
+        "--baseurl", default="http://localhost:1234/v1", help="API base URL"
+    )
+    api_group.add_argument("--apikey", default="lm-studio", help="API key")
+
+    # Native mode options
+    native_group = parser.add_argument_group("Native Mode Options")
+    native_group.add_argument(
+        "--top_k", type=int, default=20, help="top-k sampling parameter"
+    )
     args = parser.parse_args()
 
-    # set logging
-    if args.debug == True:
-        logging.basicConfig(level=logging.DEBUG)
-    logging.basicConfig(level=logging.INFO)
+    # Configure logging
+    logging.basicConfig(level=logging.DEBUG if args.debug else logging.INFO)
+
+    # Read input file
+    with open(args.input, "r", encoding="utf-8") as f:
+        text = f.read()
 
     if args.mode == "encode":
-        with open(args.filename, "r", encoding="utf-8") as f:
-            text = f.read()
         if args.encode_mode == "api":
             api_args = {
                 "baseurl": args.baseurl,
                 "apikey": args.apikey,
                 "model": args.model,
+                "temperature": args.temperature,
             }
             result = llm_encode(
                 text,
+                prompt=args.prompt,
                 password=args.password,
                 base=args.base,
                 char_per_index=args.char_per_index,
-                starter=args.starter,
                 mode="api",
                 api_args=api_args,
             )
         elif args.encode_mode == "native":
             native_args = {
-                "model_name": args.model_name,
+                "model": args.model,
                 "temperature": args.temperature,
                 "top_k": args.top_k,
             }
             result = llm_encode(
                 text,
+                prompt=args.prompt,
                 password=args.password,
                 base=args.base,
                 char_per_index=args.char_per_index,
-                starter=args.starter,
                 mode="native",
                 native_args=native_args,
             )
-        else:
-            raise ValueError("Unknown encode mode")
-        print(f"Encoded message: {result}")
-        print(save_to_file(result, args.output))
-    elif args.mode == "decode":
-        with open(args.filename, "r", encoding="utf-8") as f:
-            text = f.read()
+    else:  # decode mode
         result = llm_decode(
             text,
             password=args.password,
             base=args.base,
             char_per_index=args.char_per_index,
         )
-        print(f"Decoded message: {result}")
-        print(save_to_file(result, args.output))
+
+    print(f"{args.mode.capitalize()}d message: {result}")
+    print(save_to_file(result, args.output))
