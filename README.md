@@ -74,7 +74,7 @@ Parameters:
 
 ## Example
 
-All examples are created using qwen2.5-0.5b model with LM Studio running on M4 Mac Mini. Currently, using Chinese as the output language has better performance.
+All examples are created using qwen2.5-0.5b model with LM Studio running on M4 Mac Mini. Currently, using character-based languages (Chinese, Japanese, Korean) as prompt has better performance since they have more variations in fewer characters.
 
 Encrypt plaintext `A` with password `password`, starter text is `说来话长，`, takes about 11 minutes.
 
@@ -91,6 +91,8 @@ Output:
 ```text
 说来话长，关于我出生后的第2年，有一个关于我“我”不记得的“小人书”，它有三个故事：1.我是一个小坏蛋；2.妈妈在洗衣盆里找零钱时被狗咬伤了；3.妈妈没带钱去商场买玩具，可是在家拿过几个发下来的时候，妈一看就差9块了。后来这个“故事”就变成了“我记住了很多事，但少了
 ```
+
+More examples can be found in `tests/test_decode.py`.
 
 ## TODO
 

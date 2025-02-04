@@ -8,7 +8,7 @@ def test_decode():
     assert decoded == plaintext
 
 
-def test_decode_multi_line():
+def test_decode_multi_line_c():
     encoded = """哔哩哔哩，是腾讯音乐娱乐股有限公司于2015年9月7日在北交所上市。其发行价为4.38美元/股（约246.65港元），上市后涨幅达近15倍。
 据证券时报报导，招股文件显示，哔哩哔哩在成立前已有大量用户群及活跃粉丝群体，由腾讯主导的平台具有较大的影响力；招股书披露，其此前估值已超过20亿美元，并计划通过IPO进一步扩大规模。其中，目前的市值超500亿元。
 据证券时报报道，此次上会时间定于11月8日。招股书显示，截至2021年6月末，哔哩哔哩全平台用户数达3.79亿，同时，B站的粉丝总数达3.58亿；在移窗模式下，该数字分别为5435万和4.24亿。而腾讯音乐集团持有哔哩哔哩股份占总股本比重约为34%，是其最大股东。
@@ -16,6 +16,23 @@ def test_decode_multi_line():
 招行证券研究院研究总监赵庆明表示，自成立以来，哔哩哔哩已经完成了从独立运营到服务全平台的过渡，目前正专注于进一步提高认知度并扩大市占率。公司计划于近期通过IPO进阶为“泛娱乐”行当，并有望在2025年前实现收入规模突破300亿美元。"""
     plaintext = "Bangumi番组计划"
     decoded = __main__.llm_decode(encoded, password=None, base=16, char_per_index=8)
+    assert decoded == plaintext
+
+
+def test_decode_multi_line_j():
+    encoded = """温泉藻は基本的に単細胞生物である。通常は藻の赤血球（赤血球）が藻に住み、赤血球は藻が死亡する時に赤地に埋葬された状に変化することが考えられている。藻の赤血球の表面は細胞膜が固まっという特性があるから、赤血球の表に赤血球の細胞膜があると考えられ。赤血球の表面に赤血球細胞膜と赤地の膜が結合するという説がある。その説は、赤血球と赤地の膜は赤血丸の表面に結合すが、赤血丸は赤血团子の表面に連結しない。赤血球の結晶は赤血团子の細胞膜に結合する。
+
+== 赤血囊子 ==
+赤血囗は、赤血球を埋まる赤血球細胞膜という細胞膜と赤色血球を含む赤血血球細胞膜という"""
+    plaintext = "Secret text."
+    decoded = __main__.llm_decode(encoded, password=None, base=16, char_per_index=8)
+    assert decoded == plaintext
+
+
+def test_decode_multi_line_k():
+    encoded = """다 큰 호주까치는 상당히 강인한 새로, 와우, 애들, 침실에 서서서 그림을 떠올려보고 싶을 때가 있는데 이런 〈이야기, 〈어머니〉〉를 읽어주셔서 8월의 『한인여론』를 『한국인사회』에 실린다, 〈영원한인〉(아래)에서 이 작품의 제목을 "이야구, 침잠"이라도 부르리라! """
+    plaintext = "Secret text."
+    decoded = __main__.llm_decode(encoded, password=None, base=16, char_per_index=4)
     assert decoded == plaintext
 
 
