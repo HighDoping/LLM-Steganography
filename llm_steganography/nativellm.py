@@ -157,48 +157,57 @@ def fast_generate_text(
     Fast text generation, only for 1 character per index.
     Does not support char_per_index parameter.
     """
-    device = select_device()
 
-    # Load a tokenizer and model
+    
+    device = select_device()
     tokenizer = AutoTokenizer.from_pretrained(model)
     model = AutoModelForCausalLM.from_pretrained(model)
-
     model.to(device)
     model.eval()
 
     generated_text = prompt
+    original_top_k = top_k
 
     for index in tqdm(index_list, desc="Native Fast Encoding", leave=False):
-        clear_cache()
+        def process_token(token_index):
+            token_text = tokenizer.decode(token_index, skip_special_tokens=True)[:1]
+            hash_int = int(hashlib.sha256(token_text.encode()).hexdigest(), 16)
+            return token_text if hash_int % base == index else None
+        for retry in range(retry_limit):
+            clear_cache()
 
-        # Generate multiple token sequences
-        input_ids = tokenizer.encode(generated_text, return_tensors="pt").to(device)
-        with torch.no_grad():
-            # Perform forward pass
-            outputs = model(input_ids=input_ids)
-        logits = outputs.logits[:, -1, :]  # Extract logits of the last token
-        logits = logits / temperature  # Apply temperature scaling
-        probs = torch.softmax(logits, dim=-1)  # Convert logits to probabilities
+            # Generate multiple token sequences
+            input_ids = tokenizer.encode(generated_text, return_tensors="pt").to(device)
+            with torch.no_grad():
+                # Perform forward pass
+                outputs = model(input_ids=input_ids)
+            logits = outputs.logits[:, -1, :]  # Extract logits of the last token
+            logits = logits / temperature  # Apply temperature scaling
+            probs = torch.softmax(logits, dim=-1)  # Convert logits to probabilities
 
-        # Perform top-k filtering
-        top_k_probs, top_k_indices = torch.topk(probs, top_k, dim=-1)
-        available_tokens = []
-        for token_index in top_k_indices.tolist()[0]:
-            token_text = tokenizer.decode(token_index, skip_special_tokens=True)
-            # cut token to char_per_index
-            token_text = token_text[:1]
-            hash = hashlib.sha256(token_text.encode(encoding="utf-8")).hexdigest()
-            hash_int = int(hash, 16)
-            n = hash_int % base
-            if n == index:
-                available_tokens.append(token_text)
-        if len(available_tokens) == 0:
-            raise ValueError("No token found")
-        else:
-            # randomly select token
-            logging.debug(f"Available tokens: {available_tokens}")
-            selected_text = random.choice(available_tokens)
-            # selected_text = available_tokens[0]
+            # Perform top-k filtering
+            top_k_probs, top_k_indices = torch.topk(probs, top_k, dim=-1)
+            available_tokens = []
+            # Use map to process all tokens and filter out None values
+            available_tokens = list(filter(None, map(
+                process_token, 
+                top_k_indices.tolist()[0]
+            )))
+            if len(available_tokens) == 0:
+                if retry == retry_limit - 1:
+                    raise ValueError(
+                        f"No valid token found after {retry_limit} retries"
+                    )
+                top_k = top_k * 2
+                logging.debug(f"No valid token found, retrying with top_k={top_k}")
+            else:
+                # randomly select token
+                logging.debug(f"Available tokens: {available_tokens}")
+                selected_text = random.choice(available_tokens)
+                # selected_text = available_tokens[0]
+                top_k = original_top_k
+                break
+
         generated_text += selected_text
         logging.info(f"Generated: {generated_text}")
     return generated_text
@@ -217,6 +226,9 @@ def native_generate_text(
     """
     Generate text from the model using a custom token selection algorithm.
     """
+    if char_per_index==1:
+        return fast_generate_text(prompt, index_list, model, top_k, temperature, base, retry_limit,)
+    
     device = select_device()
 
     # Load a tokenizer and model
@@ -239,7 +251,7 @@ def native_generate_text(
                     input_ids,
                     model=model,
                     device=device,
-                    max_length=char_per_index + 2,
+                    max_length=char_per_index,
                     top_k=top_k,
                     temperature=temperature,
                     start_top_k=top_k,
