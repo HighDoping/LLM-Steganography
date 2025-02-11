@@ -10,6 +10,10 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
 def single_token_selection(logits, top_k=5, temperature=1.0):
+    """
+    Select a single token based on the logits. With top-k and temperature parameters.
+    Returns the selected token.
+    """
     logits = logits / temperature  # Apply temperature scaling
     probs = torch.softmax(logits, dim=-1)  # Convert logits to probabilities
 
@@ -27,6 +31,11 @@ def single_token_selection(logits, top_k=5, temperature=1.0):
 
 
 def multi_token_selection(logits, top_k=5, temperature=1.0):
+    """
+    Select multiple tokens based on the top-k and temperature parameters.
+    Returns a list of selected tokens. Len=top_k
+    """
+
     logits = logits / temperature  # Apply temperature scaling
     probs = torch.softmax(logits, dim=-1)  # Convert logits to probabilities
 
@@ -49,6 +58,12 @@ def generate_multiple_token(
     temperature=1.0,
     start_top_k=50,
 ):
+    """
+    Generate multiple token sequences from the model.
+    First, select a list of single tokens based on the start_top_k parameter.
+    Then, for each token in the list, generate a sequence of tokens with a maximum length of max_length.
+    Finally, return a list of generated token sequences.
+    """
     input_ids = prompt_tokens.to(device)
     model.eval()
 
@@ -90,6 +105,10 @@ def multi_token_encoding(
     base=16,
     char_per_index=8,
 ):
+    """
+    Select text from a list of multiple tokens based on the desired index.
+    Returns the selected text.
+    """
     for text in text_list:
         if len(text) < char_per_index:
             logging.debug("Text shorter than char_per_index")
