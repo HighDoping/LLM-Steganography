@@ -126,7 +126,7 @@ def llm_decode(encoded: str, password=None, base=16, char_per_index=8):
 def save_to_file(text, filename):
     with open(filename, "w", encoding="utf-8") as f:
         f.write(text)
-    return f"Saved to :{filename}"
+    return f"Saved to:{filename}"
 
 
 if __name__ == "__main__":
