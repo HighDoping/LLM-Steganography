@@ -9,6 +9,26 @@ from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
+def clear_cache():
+    gc.collect()
+    if torch.backends.mps.is_built():
+        torch.mps.empty_cache()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+
+def select_device():
+    device = torch.device(
+        "cuda"
+        if torch.cuda.is_available()
+        else "mps"
+        if torch.backends.mps.is_built()
+        else "cpu"
+    )
+    logging.info(f"Using device: {device}")
+    return device
+
+
 def single_token_selection(logits, top_k=5, temperature=1.0):
     """
     Select a single token based on the logits. With top-k and temperature parameters.
@@ -137,33 +157,20 @@ def fast_generate_text(
     Fast text generation, only for 1 character per index.
     Does not support char_per_index parameter.
     """
-    device = torch.device(
-        "cuda"
-        if torch.cuda.is_available()
-        else "mps"
-        if torch.backends.mps.is_built()
-        else "cpu"
-    )
-    logging.info(f"Using device: {device}")
+    device = select_device()
 
     # Load a tokenizer and model
     tokenizer = AutoTokenizer.from_pretrained(model)
     model = AutoModelForCausalLM.from_pretrained(model)
 
     model.to(device)
-    # input_ids = tokenizer.encode(prompt, return_tensors="pt").to(device)
     model.eval()
 
-    # generated_ids = input_ids[0].tolist()
-    # generated_text = tokenizer.decode(generated_ids, skip_special_tokens=True)
     generated_text = prompt
 
     for index in tqdm(index_list, desc="Native Fast Encoding", leave=False):
-        # run gc
-        gc.collect()
-        torch.cuda.empty_cache()
-        if torch.backends.mps.is_built():
-            torch.mps.empty_cache()
+        clear_cache()
+
         # Generate multiple token sequences
         input_ids = tokenizer.encode(generated_text, return_tensors="pt").to(device)
         with torch.no_grad():
@@ -210,33 +217,20 @@ def native_generate_text(
     """
     Generate text from the model using a custom token selection algorithm.
     """
-    device = torch.device(
-        "cuda"
-        if torch.cuda.is_available()
-        else "mps"
-        if torch.backends.mps.is_built()
-        else "cpu"
-    )
-    logging.info(f"Using device: {device}")
+    device = select_device()
 
     # Load a tokenizer and model
     tokenizer = AutoTokenizer.from_pretrained(model)
     model = AutoModelForCausalLM.from_pretrained(model)
 
     model.to(device)
-    input_ids = tokenizer.encode(prompt, return_tensors="pt").to(device)
     model.eval()
-
-    generated_ids = input_ids[0].tolist()
-    generated_text = tokenizer.decode(generated_ids, skip_special_tokens=True)
+    generated_text = prompt
 
     for index in tqdm(index_list, desc="Native Encoding", leave=False):
         for retry in range(retry_limit):
             try:
-                # run gc
-                gc.collect()
-                torch.cuda.empty_cache()
-                torch.mps.empty_cache()
+                clear_cache()
                 # Generate multiple token sequences
                 input_ids = tokenizer.encode(generated_text, return_tensors="pt").to(
                     device
