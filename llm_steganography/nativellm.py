@@ -104,6 +104,80 @@ def multi_token_encoding(
     raise ValueError("No token found")
 
 
+def fast_generate_text(
+    prompt: str,
+    index_list: list[int],
+    model="Qwen/Qwen2.5-0.5B",
+    top_k=500,
+    temperature=1.0,
+    base=16,
+    retry_limit=100,
+    **kwargs,
+) -> str:
+    """
+    Fast text generation, only for 1 character per index.
+    Does not support char_per_index parameter.
+    """
+    device = torch.device(
+        "cuda"
+        if torch.cuda.is_available()
+        else "mps"
+        if torch.backends.mps.is_built()
+        else "cpu"
+    )
+    logging.info(f"Using device: {device}")
+
+    # Load a tokenizer and model
+    tokenizer = AutoTokenizer.from_pretrained(model)
+    model = AutoModelForCausalLM.from_pretrained(model)
+
+    model.to(device)
+    # input_ids = tokenizer.encode(prompt, return_tensors="pt").to(device)
+    model.eval()
+
+    # generated_ids = input_ids[0].tolist()
+    # generated_text = tokenizer.decode(generated_ids, skip_special_tokens=True)
+    generated_text = prompt
+
+    for index in tqdm(index_list, desc="Native Fast Encoding", leave=False):
+        # run gc
+        gc.collect()
+        torch.cuda.empty_cache()
+        if torch.backends.mps.is_built():
+            torch.mps.empty_cache()
+        # Generate multiple token sequences
+        input_ids = tokenizer.encode(generated_text, return_tensors="pt").to(device)
+        with torch.no_grad():
+            # Perform forward pass
+            outputs = model(input_ids=input_ids)
+        logits = outputs.logits[:, -1, :]  # Extract logits of the last token
+        logits = logits / temperature  # Apply temperature scaling
+        probs = torch.softmax(logits, dim=-1)  # Convert logits to probabilities
+
+        # Perform top-k filtering
+        top_k_probs, top_k_indices = torch.topk(probs, top_k, dim=-1)
+        available_tokens = []
+        for token_index in top_k_indices.tolist()[0]:
+            token_text = tokenizer.decode(token_index, skip_special_tokens=True)
+            # cut token to char_per_index
+            token_text = token_text[:1]
+            hash = hashlib.sha256(token_text.encode(encoding="utf-8")).hexdigest()
+            hash_int = int(hash, 16)
+            n = hash_int % base
+            if n == index:
+                available_tokens.append(token_text)
+        if len(available_tokens) == 0:
+            raise ValueError("No token found")
+        else:
+            # randomly select token
+            logging.debug(f"Available tokens: {available_tokens}")
+            selected_text = random.choice(available_tokens)
+            # selected_text = available_tokens[0]
+        generated_text += selected_text
+        logging.info(f"Generated: {generated_text}")
+    return generated_text
+
+
 def native_generate_text(
     prompt: str,
     index_list: list[int],
