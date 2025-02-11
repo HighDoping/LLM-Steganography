@@ -29,6 +29,25 @@ def test_decode_multi_line_j():
     assert decoded == plaintext
 
 
+def test_decode_extreme_256():
+    encoded = """说来话长，遇而特丽去武将初事杂下到谢父亲曹超却分到话干的卞祖泉前也喜惧其音前或疑喜还亟令再从谢爹讨前是末节为授刺父吏却道都授内傅谢劝归复都去里处吏特不都弟东讨白遇非说贼董超
+门至扬离武曰尝东里到叔出营忆往晋孝忌白舍燕且往是赏言才曹勃始与尝处过过班班邀功"""
+    plaintext = "This is a secret."
+    password = "123456"
+    decoded = __main__.llm_decode(
+        encoded, password=password, base=256, char_per_index=1
+    )
+    assert decoded == plaintext
+
+def test_decode_extreme_256_2():
+    encoded = """说来话长，特乎不呢到门,其德尤特扬坦巨恢省邑不感岁寒叶没酸渐甚虚自慨白江川分授院院至自特亲旷内看花说 无代虚帝至喜讲通泰笑颜谓寿泰慨自迟光临恭愿允说愿临曰白言慰至舍屋御惟至嘉仪劝橘橘会请"""
+    plaintext = "Secret"
+    password = "password"
+    decoded = __main__.llm_decode(
+        encoded, password=password, base=256, char_per_index=1
+    )
+    assert decoded == plaintext
+
 def test_decode_multi_line_k():
     encoded = """다 큰 호주까치는 상당히 강인한 새로, 와우, 애들, 침실에 서서서 그림을 떠올려보고 싶을 때가 있는데 이런 〈이야기, 〈어머니〉〉를 읽어주셔서 8월의 『한인여론』를 『한국인사회』에 실린다, 〈영원한인〉(아래)에서 이 작품의 제목을 "이야구, 침잠"이라도 부르리라! """
     plaintext = "Secret text."
