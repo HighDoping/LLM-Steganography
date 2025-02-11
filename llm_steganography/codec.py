@@ -57,9 +57,11 @@ def byte_to_index(byte_stream: bytes, base=16) -> list[int]:
         # Use the standard ASCII85/base85 alphabet
         base85_alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!#$%&()*+-;<=>?@^_`{|}~"
         return [base85_alphabet.index(c) for c in base85_encoded]
+    elif base == 256:
+        return list(byte_stream)
     else:
         raise ValueError(
-            "Invalid base selected. Available options: 2, 4, 8, 16, 32, 64, 85"
+            "Invalid base selected. Available options: 2, 4, 8, 16, 32, 64, 85, 256"
         )
 
 
@@ -142,9 +144,12 @@ def index_to_byte(indices: list[int], base=16) -> bytes:
         )  # Using ~ as padding for base85
         byte_stream = base64.b85decode(base85_encoded)
         return byte_stream
+    elif base == 256:
+        # Convert indices directly to bytes
+        return bytes(indices)
     else:
         raise ValueError(
-            "Invalid base selected. Available options: 2, 4, 8, 16, 32, 64, 85"
+            "Invalid base selected. Available options: 2, 4, 8, 16, 32, 64, 85, 256"
         )
 
 

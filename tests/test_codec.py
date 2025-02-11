@@ -105,6 +105,20 @@ def test_index_to_byte_base85():
     assert byte_stream == b"\xab\xcd\xef\xab"
 
 
+def test_byte_to_index_base256():
+    byte_stream = b"\xab\xcd\xef\xab"
+    base = 256
+    indices = codec.byte_to_index(byte_stream, base=base)
+    assert indices == [171, 205, 239, 171]
+
+
+def test_index_to_byte_base256():
+    indices = [171, 205, 239, 171]
+    base = 256
+    byte_stream = codec.index_to_byte(indices, base=base)
+    assert byte_stream == b"\xab\xcd\xef\xab"
+
+
 def test_reed_solomon_codec():
     rs_codec = codec.ReedSolomonCodec(8, 6)
     data = b"Hello, World!"
